@@ -1,0 +1,11 @@
+# YOLOv8 dataset config. After merge_datasets.py the folder layout is:
+#   datasets/civiclens/images/{train,val}   datasets/civiclens/labels/{train,val}
+path: datasets/civiclens
+train: images/train
+val: images/val
+
+names:
+  0: pothole
+  1: garbage
+  2: damaged_streetlight
+  3: waterlogging

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CivicLens AI Triage - Demo</title>
+<style>
+  :root { --bg:#0f172a; --card:#1e293b; --text:#e2e8f0; --muted:#94a3b8; --accent:#38bdf8; --ok:#22c55e; --warn:#f59e0b; --bad:#ef4444; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:20px 24px; border-bottom:1px solid #334155; }
+  header h1 { margin:0; font-size:20px; } header p { margin:4px 0 0; color:var(--muted); font-size:14px; }
+  main { display:grid; grid-template-columns: minmax(280px, 360px) 1fr; gap:20px; padding:20px 24px; max-width:1200px; margin:0 auto; }
+  @media (max-width: 800px) { main { grid-template-columns: 1fr; } }
+  .card { background:var(--card); border-radius:12px; padding:16px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:10px 0 4px; }
+  input, select { width:100%; padding:8px 10px; border-radius:8px; border:1px solid #475569; background:#0f172a; color:var(--text); }
+  button { margin-top:16px; width:100%; padding:10px; border:0; border-radius:8px; background:var(--accent); color:#0f172a; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .badge { display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; }
+  .AUTO_DISPATCH { background:var(--ok); color:#052e16; } .NEEDS_REVIEW, .NEEDS_SECOND_REPORT { background:var(--warn); color:#451a03; } .REJECTED { background:var(--bad); color:#fff; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-top:12px; }
+  .stat { background:#0f172a; border-radius:8px; padding:10px; } .stat small { color:var(--muted); display:block; } .stat b { font-size:16px; }
+  img { max-width:100%; border-radius:10px; margin-top:12px; }
+  ul { padding-left:18px; color:var(--muted); font-size:14px; } pre { overflow:auto; font-size:12px; background:#0f172a; padding:10px; border-radius:8px; }
+  .err { color:var(--bad); }
+</style>
+</head>
+<body>
+<header>
+  <h1>CivicLens - AI Triage Demo</h1>
+  <p>Upload a photo of a civic issue. The service verifies it, detects the problem, scores severity and predicts the repair time.</p>
+</header>
+<main>
+  <section class="card">
+    <label>Photo</label><input type="file" id="file" accept="image/*">
+    <label>Your latitude (optional - enables the GPS check)</label><input id="lat" placeholder="13.0827">
+    <label>Your longitude (optional)</label><input id="lng" placeholder="80.2707">
+    <label>Near sensitive places (comma separated)</label><input id="near" placeholder="hospital,school,main_road">
+    <label>Distance to depot (km)</label><input id="dist" value="5">
+    <label>Traffic</label>
+    <select id="traffic"><option value="0">Light</option><option value="1" selected>Normal</option><option value="2">Heavy</option></select>
+    <label>Rain (mm)</label><input id="rain" value="0">
+    <label>Reporter trust (0-1, optional)</label><input id="trust" placeholder="0.8">
+    <label>API key (only if the server requires one)</label><input id="key" type="password">
+    <button id="go">Analyze</button>
+  </section>
+  <section class="card" id="out"><p style="color:var(--muted)">Results will appear here.</p></section>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+$('go').onclick = async () => {
+  const f = $('file').files[0];
+  if (!f) { $('out').innerHTML = '<p class="err">Please choose a photo first.</p>'; return; }
+  const fd = new FormData();
+  fd.append('file', f);
+  const add = (k, v) => { if (v !== '') fd.append(k, v); };
+  add('user_lat', $('lat').value.trim()); add('user_lng', $('lng').value.trim());
+  add('near_sensitive', $('near').value.trim()); add('distance_to_depot_km', $('dist').value.trim());
+  add('traffic_level', $('traffic').value); add('rain_mm', $('rain').value.trim()); add('user_trust', $('trust').value.trim());
+  $('go').disabled = true; $('out').innerHTML = '<p style="color:var(--muted)">Analyzing...</p>';
+  try {
+    const headers = $('key').value ? { 'X-API-Key': $('key').value } : {};
+    const r = await fetch('/analyze/upload', { method: 'POST', body: fd, headers });
+    const d = await r.json();
+    if (!r.ok) { $('out').innerHTML = '<p class="err">Error: ' + esc(JSON.stringify(d.detail || d)) + '</p>'; return; }
+    let h = '<span class="badge ' + esc(d.status) + '">' + esc(d.status) + '</span> ';
+    h += '<span style="color:var(--muted);font-size:12px">model: ' + esc(d.model_mode) + ' - ' + esc(d.processing_ms) + ' ms</span>';
+    if (d.model_mode === 'mock') h += '<p class="err" style="font-size:13px">Mock detector active (no trained weights found): detection results are for demonstration only.</p>';
+    if (d.valid) {
+      h += '<div class="grid">' +
+        [['Issue', d.issue_type], ['Confidence', Math.round(d.confidence*100) + '%'], ['Severity', d.severity + ' - ' + d.severity_label],
+         ['Priority', d.priority_score + ' (' + d.priority_level + ')'], ['Est. fix time', d.estimated_fix_text], ['Department', d.department], ['Crew', d.crew_size]]
+        .map(x => '<div class="stat"><small>' + x[0] + '</small><b>' + esc(x[1]) + '</b></div>').join('') + '</div>';
+      h += '<p><b>Materials:</b> ' + d.materials.map(esc).join(', ') + '</p><p><b>Tools:</b> ' + d.tools.map(esc).join(', ') + '</p>';
+      h += '<p style="color:var(--muted)">' + esc(d.dispatch_policy) + '</p>';
+      if (d.annotated_image_base64) h += '<img alt="annotated result" src="' + d.annotated_image_base64 + '">';
+    } else {
+      h += '<p class="err">Rejected: ' + esc(d.reject_reason) + '</p>';
+    }
+    h += '<h4>Why?</h4><ul>' + d.explanation.map(e => '<li>' + esc(e) + '</li>').join('') + '</ul>';
+    if (d.validation.flags.length) h += '<p style="color:var(--muted)">Validation flags: ' + d.validation.flags.map(esc).join(', ') + '</p>';
+    $('out').innerHTML = h;
+  } catch (e) { $('out').innerHTML = '<p class="err">Request failed: ' + esc(e.message) + '</p>'; }
+  finally { $('go').disabled = false; }
+};
+</script>
+</body>
+</html>
