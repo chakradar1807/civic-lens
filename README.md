@@ -14,9 +14,17 @@ The project has three parts:
 
 ## Screenshots
 
-| Landing page | Complaint with AI triage | Dashboard |
+### Landing page
+
+| Hero | Features | How it works |
 |---|---|---|
-| ![Landing](docs/screenshots/landing.png) | ![AI triage](docs/screenshots/triage.png) | ![Dashboard](docs/screenshots/dashboard.png) |
+| ![Landing hero](docs/screenshots/landing.png) | ![Landing features](docs/screenshots/landing2.png) | ![Landing how it works](docs/screenshots/landing3.png) |
+
+### App
+
+| Complaint with AI triage (ML service) | User dashboard |
+|---|---|
+| ![AI triage](docs/screenshots/triage.png) | ![Dashboard](docs/screenshots/dashboard.png) |
 
 ## Architecture
 
